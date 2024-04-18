@@ -43,7 +43,7 @@ fn app() -> App<'static, 'static> {
                 .long("timeout")
                 .help("Metadata fetch timeout in milliseconds")
                 .takes_value(true)
-                .default_value("60000"),
+                .default_value("10000"),
         )
         .subcommand(SubCommand::with_name("list").about("List items"))
         .subcommand(
@@ -164,13 +164,15 @@ async fn main() {
             list(consumer, timeout, verbosity);
         }
         ("read", Some(matches)) => {
-            let consumer: StreamConsumer = ClientConfig::new()
+            let consumer: BaseConsumer = ClientConfig::new()
                 .set("group.id", "example")
                 .set("client.id", kafka_client_id)
                 .set("bootstrap.servers", brokers)
                 .set("enable.partition.eof", "false")
                 .set("session.timeout.ms", format!("{}", timeout.as_millis()))
-                .set("enable.auto.commit", "true")
+                .set("enable.auto.commit", "false")
+                .set("auto.offset.reset", "earliest")
+                .set("enable.auto.offset.store", "false")
                 .create()
                 .unwrap_or_else(|err| {
                     eprintln!(
@@ -180,7 +182,7 @@ async fn main() {
                     std::process::exit(1);
                 });
 
-            read(consumer, verbosity, timeout, matches).await;
+            read(consumer, verbosity, timeout, matches);
         }
         ("tail", Some(match_list)) => {
             let consumer: StreamConsumer = ClientConfig::new()
@@ -212,8 +214,8 @@ async fn main() {
         _ => unreachable!(),
     };
 }
-async fn read(
-    consumer: StreamConsumer,
+fn read(
+    consumer: BaseConsumer,
     verbosity: Verbosity,
     timeout: Duration,
     matches: &ArgMatches<'static>,
@@ -305,6 +307,10 @@ async fn read(
     let metadata_topics = metadata.topics();
     let meta_topic = &metadata_topics[0];
     let partitions = meta_topic.partitions();
+    if partitions.len() == 0 {
+        eprintln!("No partitions found for {topic}.");
+        std::process::exit(1);
+    }
     let topic_partition_list = if let Some(start_time) = start_time {
         let mut tpl = TopicPartitionList::with_capacity(partitions.len());
         for partition in partitions {
@@ -336,16 +342,39 @@ async fn read(
             eprintln!("error with seek partition: {:?}", err);
             std::process::exit(1);
         });
+    let watermarks = consumer
+        .fetch_watermarks(topic, partitions.first().expect("a parition").id(), timeout)
+        .unwrap_or_else(|err| {
+            eprintln!("error partition watermark: {:?}", err);
+            std::process::exit(1);
+        });
 
+    let mut message_read = false;
     loop {
-        match consumer.recv().await {
-            Err(e) => eprint!("Kafka error: {}", e),
-            Ok(m) => {
-                print_message(&m, &verbosity);
-                consumer.commit_message(&m, CommitMode::Async).unwrap();
+        let message = consumer.poll(timeout);
+        if let Some(m) = message {
+            match m {
+                Err(e) => eprint!("Kafka error: {}", e),
+                Ok(m) => {
+                    message_read = true;
+                    print_message(&m, &verbosity);
+                    //consumer.commit_message(&m, CommitMode::Async).unwrap();
+                    let consumed_offset = m.offset();
+                    if consumed_offset >= watermarks.1 - 1 {
+                        break;
+                    }
+                }
             }
-        };
+        } else {
+            // only exit if nothing read we might still be waiting for data.
+            if !message_read {
+                eprintln!("Polling timed out no messages read.");
+                std::process::exit(1);
+            }
+        }
     }
+    // dont bother with destructors.
+    std::process::exit(0);
 }
 
 fn print_message(m: &BorrowedMessage, verbosity: &Verbosity) {
@@ -396,7 +425,6 @@ async fn tail(
         .subscribe(&topics.to_vec())
         .expect("Can't subscribe to specified topics");
     loop {
-        println!("jere");
         match consumer.recv().await {
             Err(e) => eprint!("Kafka error: {}", e),
             Ok(m) => {
@@ -444,4 +472,6 @@ fn list(consumer: BaseConsumer, timeout: Duration, verbosity: Verbosity) {
             }
         }
     }
+
+    std::process::exit(0);
 }
