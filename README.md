@@ -29,7 +29,7 @@ k12 read -b 'localhost:9092' --topic one --offset 4`
 ### times offset
 using https://docs.rs/chrono-english/latest/chrono_english/
 ```
-k12 read -b 'localhost:9092' --topic one --offset 4`
+k12 read -b 'localhost:9092' --topic one --start-offset "1h ago" --end-offset "10m ago"
 {"message":"message 1","timestamp":1713505424670,"topic":"one"}
 {"message":"message 1","timestamp":1713506974124,"topic":"one"}
 ```
