@@ -47,3 +47,12 @@ k12 read -b 'localhost:9092' --topic one --start '2024-04-19T05:30:00Z' --end '2
 k12 tail -b 'localhost:9092' --topic one`
 {"message":"message 1","timestamp":1713508350144,"topic":"one"}
 ```
+
+## Test data
+For now I use ruby
+
+```
+gem install kafka
+
+ruby produce.rb	
+```
