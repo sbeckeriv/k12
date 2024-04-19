@@ -272,13 +272,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "k2"
+name = "k12"
 version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-english",
  "clap",
  "rdkafka",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

@@ -15,6 +15,7 @@ use rdkafka::message::{BorrowedMessage, Headers, Message};
 use rdkafka::topic_partition_list::TopicPartitionList;
 use rdkafka::util::{get_rdkafka_version, Timeout};
 use rdkafka::Offset;
+use serde_json::json;
 
 fn app() -> App<'static, 'static> {
     App::new("k2")
@@ -191,7 +192,7 @@ async fn main() {
                 .set("bootstrap.servers", brokers)
                 .set("enable.partition.eof", "false")
                 .set("session.timeout.ms", format!("{}", timeout.as_millis()))
-                .set("enable.auto.commit", "true")
+                .set("enable.auto.commit", "false")
                 .create()
                 .unwrap_or_else(|err| {
                     eprintln!(
@@ -295,15 +296,13 @@ fn read(
     let end_time = end_datetime
         .or(end_offset)
         .or(Some(now))
-        .expect("end_time should always be set");
+        .expect("end_time should always be set")
+        .timestamp_millis();
     let start_time = start_datetime.or(start_offset);
     let metadata = consumer
-        .fetch_metadata(Some(topic), Timeout::Never)
-        .expect("metatdata");
+        .fetch_metadata(Some(topic), timeout)
+        .expect("metatdata could not be loaded");
 
-    let metadata = consumer
-        .fetch_metadata(Some(topic), Timeout::Never)
-        .expect("metadata");
     let metadata_topics = metadata.topics();
     let meta_topic = &metadata_topics[0];
     let partitions = meta_topic.partitions();
@@ -311,33 +310,33 @@ fn read(
         eprintln!("No partitions found for {topic}.");
         std::process::exit(1);
     }
-    let topic_partition_list = if let Some(start_time) = start_time {
-        let mut tpl = TopicPartitionList::with_capacity(partitions.len());
-        for partition in partitions {
-            tpl.add_partition(&topic, partition.id());
-        }
+
+    let mut tpl = TopicPartitionList::with_capacity(partitions.len());
+    for partition in partitions {
+        tpl.add_partition(&topic, partition.id());
+    }
+
+    let tpl = if let Some(start_time) = start_time {
         tpl.set_all_offsets(Offset::Offset(start_time.timestamp_millis()))
-            .expect("msg");
+            .expect("cannot set time offsets");
+
+        let mut tpl = consumer.offsets_for_times(tpl, timeout).expect("msg");
+        tpl.set_all_offsets(Offset::Offset(start_time.timestamp_millis()))
+            .expect("cannot set time offsets");
         consumer
             .offsets_for_times(tpl, Timeout::Never)
-            .expect("msg")
+            .expect("offsets_for_times failed to set")
     } else if let Some(offset) = offset {
-        let offset = Offset::Offset(offset);
-        let mut txn_tpl = TopicPartitionList::new();
-
-        txn_tpl
-            .add_partition_offset(&topic, 0, offset)
-            .unwrap_or_else(|err| {
-                eprintln!("error with offset partition: {:?}", err);
-                std::process::exit(1);
-            });
-        txn_tpl
+        tpl.set_all_offsets(Offset::OffsetTail(offset))
+            .expect("set all offsets error");
+        tpl
     } else {
         unreachable!("Offset or start date should have been set! ")
     };
-    consumer.assign(&topic_partition_list).expect("msg");
+
+    consumer.assign(&tpl).expect("msg");
     consumer
-        .seek_partitions(topic_partition_list, timeout)
+        .seek_partitions(tpl, timeout)
         .unwrap_or_else(|err| {
             eprintln!("error with seek partition: {:?}", err);
             std::process::exit(1);
@@ -357,6 +356,13 @@ fn read(
                 Err(e) => eprint!("Kafka error: {}", e),
                 Ok(m) => {
                     message_read = true;
+                    if m.timestamp()
+                        .to_millis()
+                        .map(|t| t > end_time)
+                        .unwrap_or(false)
+                    {
+                        std::process::exit(0);
+                    }
                     print_message(&m, &verbosity);
                     //consumer.commit_message(&m, CommitMode::Async).unwrap();
                     let consumed_offset = m.offset();
@@ -386,17 +392,8 @@ fn print_message(m: &BorrowedMessage, verbosity: &Verbosity) {
             ""
         }
     };
+
     match verbosity {
-        Verbosity::Silent => println!("{payload}"),
-        Verbosity::Soft => println!(
-            "{}: {payload}",
-            m.timestamp().to_millis().unwrap_or_default()
-        ),
-        Verbosity::Loud => println!(
-            "{}| {}: {payload}",
-            m.topic(),
-            m.timestamp().to_millis().unwrap_or_default()
-        ),
         Verbosity::TooMuch => println!(
             "key:'{:?}', topic:'{}', partition:{}, offset:{}, timestamp:{}, payload:{payload}",
             m.key(),
@@ -405,7 +402,16 @@ fn print_message(m: &BorrowedMessage, verbosity: &Verbosity) {
             m.offset(),
             m.timestamp().to_millis().unwrap_or_default()
         ),
+        _ => {
+            let json = json!({
+                "timestamp": m.timestamp().to_millis().unwrap_or_default(),
+                "topic": m.topic(),
+                "message": payload
+            });
+            println!("{json}");
+        }
     }
+
     if verbosity == &Verbosity::TooMuch {
         if let Some(headers) = m.headers() {
             for header in headers.iter() {

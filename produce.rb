@@ -1,7 +1,7 @@
 require 'kafka'
 
 # Create a Kafka producer instance
-kafka = Kafka.new(['localhost:29092'])
+kafka = Kafka.new(['0.0.0.0:29092'])
 
 # Create a producer for the desired topic
 producer = kafka.producer
