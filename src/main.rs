@@ -16,21 +16,27 @@ async fn main() {
     let matches = cli::app().get_matches();
     let verbosity = Verbosity::from(matches.occurrences_of("verbose") as u8);
     let group = matches.value_of("group").expect("group id for client");
+    let kafka_client_id = matches.value_of("client_id").map(|id| id.to_string());
     let brokers = matches
         .value_of("brokers")
-        .expect("Brokers in kafka format");
+        .expect("Brokers in kaf)ka format");
     let timeout = value_t!(matches, "timeout", u64).unwrap();
     let timeout = Duration::from_millis(timeout);
 
     let user_id = env::var("USER").unwrap_or_else(|_| "unknown".to_string());
-    let kafka_client_id: String = user_id
-        .chars()
-        .map(|c| match c {
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '_' | '-' => c.to_string(),
-            _ => format!("_{}", c as u8),
+    let kafka_client_id: String = kafka_client_id
+        .or_else(|| {
+            Some(
+                user_id
+                    .chars()
+                    .map(|c| match c {
+                        'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '_' | '-' => c.to_string(),
+                        _ => format!("_{}", c as u8),
+                    })
+                    .collect(),
+            )
         })
-        .collect();
-
+        .unwrap();
     if verbosity >= Verbosity::TooMuch {
         let (version_n, version_s) = get_rdkafka_version();
         println!("rd_kafka_version: 0x{:08x}, {}", version_n, version_s);
@@ -95,7 +101,6 @@ async fn main() {
                     std::process::exit(1);
                 })
                 .expect("topics")
-                .map(|t| t)
                 .collect();
             action::tail(consumer, verbosity, topics).await;
         }

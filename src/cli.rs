@@ -15,6 +15,14 @@ pub fn app() -> App<'static, 'static> {
                 .global(true),
         )
         .arg(
+            Arg::with_name("client_id")
+                .short("cid")
+                .long("client_id")
+                .help("Client id to use. current user name or unknown is used by default.")
+                .takes_value(true)
+                .global(true),
+        )
+        .arg(
             Arg::with_name("brokers")
                 .short("b")
                 .long("brokers")

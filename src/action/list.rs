@@ -26,7 +26,7 @@ pub fn list(consumer: BaseConsumer, timeout: Duration, verbosity: Verbosity) {
         if topic.error().is_some() {
             print!(" Err: {:?}", topic.error());
         }
-        println!("");
+        println!();
         if verbosity >= Verbosity::Loud {
             for partition in topic.partitions() {
                 println!(

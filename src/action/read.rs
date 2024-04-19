@@ -28,7 +28,7 @@ pub fn read(
     });
 
     consumer
-        .subscribe(&vec![topic])
+        .subscribe(&[topic])
         .expect("Can't subscribe to specified topics");
 
     let now = Utc::now();
@@ -107,14 +107,14 @@ pub fn read(
     let metadata_topics = metadata.topics();
     let meta_topic = &metadata_topics[0];
     let partitions = meta_topic.partitions();
-    if partitions.len() == 0 {
+    if partitions.is_empty() {
         eprintln!("No partitions found for {topic}.");
         std::process::exit(1);
     }
 
     let mut tpl = TopicPartitionList::with_capacity(partitions.len());
     for partition in partitions {
-        tpl.add_partition(&topic, partition.id());
+        tpl.add_partition(topic, partition.id());
     }
 
     let tpl = if let Some(start_time) = start_time {
