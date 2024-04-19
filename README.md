@@ -48,6 +48,14 @@ k12 tail -b 'localhost:9092' --topic one`
 {"message":"message 1","timestamp":1713508350144,"topic":"one"}
 ```
 
+## run kafka via podman
+
+port 29092
+
+```
+podman-compose up
+```
+
 ## Test data
 For now I use ruby
 
