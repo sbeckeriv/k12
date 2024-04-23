@@ -103,7 +103,7 @@ pub fn read(
     let start_time = start_datetime.or(start_offset);
     let metadata = consumer
         .fetch_metadata(Some(topic), timeout)
-        .expect("metatdata could not be loaded");
+        .expect("metadata could not be loaded");
 
     let metadata_topics = metadata.topics();
     let meta_topic = &metadata_topics[0];
@@ -144,7 +144,11 @@ pub fn read(
             std::process::exit(1);
         });
     let watermarks = consumer
-        .fetch_watermarks(topic, partitions.first().expect("a parition").id(), timeout)
+        .fetch_watermarks(
+            topic,
+            partitions.first().expect("a partition").id(),
+            timeout,
+        )
         .unwrap_or_else(|err| {
             eprintln!("error partition watermark: {:?}", err);
             std::process::exit(1);
@@ -166,9 +170,7 @@ pub fn read(
                         std::process::exit(0);
                     }
                     print_message(&m, &verbosity, &format_hint);
-                    //consumer.commit_message(&m, CommitMode::Async).unwrap();
-                    let consumed_offset = m.offset();
-                    if consumed_offset >= watermarks.1 - 1 {
+                    if m.offset() >= watermarks.1 - 1 {
                         break;
                     }
                 }
@@ -181,6 +183,6 @@ pub fn read(
             }
         }
     }
-    // dont bother with destructors.
+    // don't bother with destructors.
     std::process::exit(0);
 }
