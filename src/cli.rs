@@ -13,6 +13,14 @@ pub fn app() -> App<'static, 'static> {
                 .global(true),
         )
         .arg(
+            Arg::with_name("format")
+                .long("format")
+                .short("f")
+                .help("format of output. valid: json*, raw")
+                .takes_value(true)
+                .global(true),
+        )
+        .arg(
             Arg::with_name("group")
                 .short("g")
                 .long("group")

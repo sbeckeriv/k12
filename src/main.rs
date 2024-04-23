@@ -10,7 +10,7 @@ mod action;
 mod cli;
 mod common;
 
-use common::{kafka_debug_from_int, Verbosity};
+use common::{kafka_debug_from_int, Format, FormatConfig, FormatHint, Verbosity};
 
 #[tokio::main]
 async fn main() {
@@ -47,6 +47,19 @@ async fn main() {
         let (version_n, version_s) = get_rdkafka_version();
         println!("rd_kafka_version: 0x{:08x}, {}", version_n, version_s);
     }
+    let format_hint: Option<FormatHint> =
+        matches.value_of("format-hint").map(|format| format.into());
+
+    let format: Format = matches
+        .value_of("format")
+        .map(|format| format.into())
+        .unwrap_or_else(|| Format::Json);
+
+    let format_config = FormatConfig {
+        format_hint,
+        verbosity,
+        format,
+    };
     match matches.subcommand() {
         ("list", Some(_)) => {
             let consumer: BaseConsumer = ClientConfig::new()
@@ -62,7 +75,7 @@ async fn main() {
                     );
                     std::process::exit(1);
                 });
-            action::list(consumer, timeout, verbosity);
+            action::list(consumer, timeout, format_config.verbosity);
         }
         ("read", Some(matches)) => {
             let consumer: BaseConsumer = ClientConfig::new()
@@ -84,7 +97,7 @@ async fn main() {
                     std::process::exit(1);
                 });
 
-            action::read(consumer, verbosity, timeout, &matches);
+            action::read(consumer, format_config, timeout, &matches);
         }
         ("tail", Some(match_list)) => {
             let consumer: StreamConsumer = ClientConfig::new()
@@ -111,7 +124,7 @@ async fn main() {
                 })
                 .expect("topics")
                 .collect();
-            action::tail(consumer, verbosity, topics, &matches).await;
+            action::tail(consumer, format_config, topics).await;
         }
         _ => unreachable!(),
     };
