@@ -8,7 +8,7 @@ use rdkafka::util::Timeout;
 use rdkafka::Offset;
 use std::time::Duration;
 
-use crate::common::{print_message, Verbosity};
+use crate::common::{print_message, FormatHint, Verbosity};
 
 fn parse_datetime(datetime_str: &str) -> Result<DateTime<Utc>, String> {
     DateTime::parse_from_rfc3339(datetime_str)
@@ -26,7 +26,8 @@ pub fn read(
         eprintln!("topic is required");
         std::process::exit(1);
     });
-
+    let format_hint: Option<FormatHint> =
+        matches.value_of("format-hint").map(|format| format.into());
     consumer
         .subscribe(&[topic])
         .expect("Can't subscribe to specified topics");
@@ -164,7 +165,7 @@ pub fn read(
                     {
                         std::process::exit(0);
                     }
-                    print_message(&m, &verbosity);
+                    print_message(&m, &verbosity, &format_hint);
                     //consumer.commit_message(&m, CommitMode::Async).unwrap();
                     let consumed_offset = m.offset();
                     if consumed_offset >= watermarks.1 - 1 {

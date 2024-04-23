@@ -6,6 +6,13 @@ pub fn app() -> App<'static, 'static> {
         .author("Your Name")
         .about("A command-line application with subcommands and optional parameters")
         .arg(
+            Arg::with_name("format-hint")
+                .long("format-hint")
+                .help("format hint will try to parse the message first. valid: json")
+                .takes_value(true)
+                .global(true),
+        )
+        .arg(
             Arg::with_name("group")
                 .short("g")
                 .long("group")
@@ -15,9 +22,9 @@ pub fn app() -> App<'static, 'static> {
                 .global(true),
         )
         .arg(
-            Arg::with_name("client_id")
+            Arg::with_name("client-id")
                 .short("cid")
-                .long("client_id")
+                .long("client-id")
                 .help("Client id to use. current user name or unknown is used by default.")
                 .takes_value(true)
                 .global(true),
@@ -37,6 +44,13 @@ pub fn app() -> App<'static, 'static> {
                 .short("v")
                 .multiple(true)
                 .help("Increase verbosity level"),
+        )
+        .arg(
+            Arg::with_name("debug")
+                .global(true)
+                .short("d")
+                .multiple(true)
+                .help("kafka debug level"),
         )
         .arg(
             Arg::with_name("timeout")

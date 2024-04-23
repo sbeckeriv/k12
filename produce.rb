@@ -10,6 +10,7 @@ producer = kafka.producer
 producer.produce('message 1', topic: "one")
 producer.produce('message 2', topic: "two")
 producer.produce('message 3', topic: "three")
+producer.produce('{"a":3, "b":"c", "d":["a"], "e":{"a":"b"}}', topic: "json")
 
 # Deliver the messages
 producer.deliver_messages

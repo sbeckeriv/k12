@@ -1,5 +1,4 @@
 use clap::value_t;
-use common::Verbosity;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::consumer::BaseConsumer;
@@ -11,12 +10,15 @@ mod action;
 mod cli;
 mod common;
 
+use common::{kafka_debug_from_int, Verbosity};
+
 #[tokio::main]
 async fn main() {
     let matches = cli::app().get_matches();
     let verbosity = Verbosity::from(matches.occurrences_of("verbose") as u8);
-    let group = matches.value_of("group").expect("group id for client");
-    let kafka_client_id = matches.value_of("client_id").map(|id| id.to_string());
+    let debug_level = kafka_debug_from_int(matches.occurrences_of("debug") as u8);
+    let group = matches.value_of("group");
+    let kafka_client_id = matches.value_of("client-id").map(ToString::to_string);
     let brokers = matches
         .value_of("brokers")
         .expect("Brokers in kaf)ka format");
@@ -37,6 +39,10 @@ async fn main() {
             )
         })
         .unwrap();
+    let group = group
+        .map(ToString::to_string)
+        .or_else(|| Some(format!("{kafka_client_id}_group")))
+        .expect("Group id set");
     if verbosity >= Verbosity::TooMuch {
         let (version_n, version_s) = get_rdkafka_version();
         println!("rd_kafka_version: 0x{:08x}, {}", version_n, version_s);
@@ -47,6 +53,7 @@ async fn main() {
                 .set("group.id", group)
                 .set("client.id", kafka_client_id)
                 .set("bootstrap.servers", brokers)
+                .set_log_level(debug_level)
                 .create()
                 .unwrap_or_else(|err| {
                     eprintln!(
@@ -67,6 +74,7 @@ async fn main() {
                 .set("enable.auto.commit", "false")
                 .set("auto.offset.reset", "earliest")
                 .set("enable.auto.offset.store", "false")
+                .set_log_level(debug_level)
                 .create()
                 .unwrap_or_else(|err| {
                     eprintln!(
@@ -76,7 +84,7 @@ async fn main() {
                     std::process::exit(1);
                 });
 
-            action::read(consumer, verbosity, timeout, matches);
+            action::read(consumer, verbosity, timeout, &matches);
         }
         ("tail", Some(match_list)) => {
             let consumer: StreamConsumer = ClientConfig::new()
@@ -86,6 +94,7 @@ async fn main() {
                 .set("enable.partition.eof", "false")
                 .set("session.timeout.ms", format!("{}", timeout.as_millis()))
                 .set("enable.auto.commit", "false")
+                .set_log_level(debug_level)
                 .create()
                 .unwrap_or_else(|err| {
                     eprintln!(
@@ -102,7 +111,7 @@ async fn main() {
                 })
                 .expect("topics")
                 .collect();
-            action::tail(consumer, verbosity, topics).await;
+            action::tail(consumer, verbosity, topics, &matches).await;
         }
         _ => unreachable!(),
     };
