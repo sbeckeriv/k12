@@ -2,8 +2,10 @@ use clap::value_t;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::consumer::BaseConsumer;
+use rdkafka::producer::FutureProducer;
 use rdkafka::util::get_rdkafka_version;
 use std::env;
+use std::io::Read;
 use std::time::Duration;
 
 mod action;
@@ -39,6 +41,7 @@ async fn main() {
             )
         })
         .unwrap();
+
     let group = group
         .map(ToString::to_string)
         .or_else(|| Some(format!("{kafka_client_id}_group")))
@@ -60,7 +63,26 @@ async fn main() {
         verbosity,
         format,
     };
+
     match matches.subcommand() {
+        ("write", Some(matches)) => {
+            let producer: FutureProducer = ClientConfig::new()
+                .set("bootstrap.servers", brokers)
+                .set("message.timeout.ms", "5000")
+                .set("message.timeout.ms", format!("{}", timeout.as_millis()))
+                .create()
+                .expect("Producer creation error");
+            let topic = matches.value_of("topic").unwrap_or_else(|| {
+                eprintln!("topic is required");
+                std::process::exit(1);
+            });
+            let mut buf = String::new();
+            std::io::stdin()
+                .read_to_string(&mut buf)
+                .expect("could not read stdin");
+            let buf = buf.strip_suffix("\n").expect("could not read stdin");
+            action::produce(producer, topic, &buf).await;
+        }
         ("list", Some(_)) => {
             let consumer: BaseConsumer = ClientConfig::new()
                 .set("group.id", group)

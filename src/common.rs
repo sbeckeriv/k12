@@ -132,11 +132,10 @@ impl<'a> DataDisplay<'a> {
             }),
             _ => serde_json::Value::String(self.payload.into()),
         };
-
         let json = json!({
-            "timestamp": self.timestamp,
             "topic": self.topic,
-            "message": payload
+            "payload": payload,
+            "timestamp": self.timestamp,
         });
         println!("{json}");
     }

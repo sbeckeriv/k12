@@ -70,6 +70,14 @@ pub fn app() -> App<'static, 'static> {
         )
         .subcommand(SubCommand::with_name("list").about("List items"))
         .subcommand(
+            SubCommand::with_name("write").about("Write to topic").arg(
+                Arg::with_name("topic")
+                    .long("topic")
+                    .help("Only fetch the metadata of the specified topic")
+                    .takes_value(true),
+            ),
+        )
+        .subcommand(
             SubCommand::with_name("read")
                 .about("Read an item")
                 .arg(
